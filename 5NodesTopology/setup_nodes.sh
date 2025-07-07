@@ -8,21 +8,22 @@ done
 
 # Paths and file names
 json_file="node.json"
-binary_file="serf"      # Use the full path to the serf binary
-pytogo_binary="pytogoapi"  # This is the binary file for pytogo
+HOST_SERF_BINARY="/usr/bin/serf"    # <--- CORRECTED: Source path of serf on your host
+pytogo_binary="pytogoapi"             # This is the binary file for pytogo
 destination_dir="/opt/serfapp"
+CONTAINER_SERF_PATH="$destination_dir/serf" # <--- NEW: Explicit target path for serf inside container
 
 # Function to set up Ubuntu nodes
 setup_ubuntu_nodes() {
   for i in "${!containers[@]}"; do
     container="${containers[$i]}"
-    
+
     # Check if container is running
     if ! docker ps --format '{{.Names}}' | grep -q "$container"; then
       echo "Container $container is not running, skipping..."
       continue
     fi
-    
+
     echo "Setting up $container..."
 
     # Get the IP address of the eth1 interface directly from within the container
@@ -31,9 +32,9 @@ setup_ubuntu_nodes() {
       echo "Failed to retrieve IP address for $container"
       continue
     fi
-    
+
     echo "IP address for $container (eth1): $ip_address"
-    
+
     # Generate the JSON configuration file dynamically
     json_content=$(cat <<EOF
 {
@@ -44,7 +45,7 @@ setup_ubuntu_nodes() {
 }
 EOF
 )
-    
+
     # Create a temporary JSON file on the host
     temp_json_file=$(mktemp)
     echo "$json_content" > "$temp_json_file"
@@ -54,7 +55,7 @@ EOF
 
     # Copy the generated JSON file and serf binary into the /opt/serfapp/ directory
     docker cp "$temp_json_file" "$container":"$destination_dir/node.json" || { echo "Failed to copy node.json to $container"; exit 1; }
-    docker cp "$binary_file" "$container":"$destination_dir/" || { echo "Failed to copy serf binary to $container"; exit 1; }
+    docker cp "$HOST_SERF_BINARY" "$container":"$CONTAINER_SERF_PATH" || { echo "Failed to copy serf binary to $container"; exit 1; } # <--- CORRECTED: Use HOST_SERF_BINARY and CONTAINER_SERF_PATH
 
     # Create the pytogo directory inside the container
     docker exec "$container" mkdir -p "$destination_dir/pytogo"
@@ -63,8 +64,8 @@ EOF
     docker cp "$pytogo_binary" "$container":"$destination_dir/pytogo/" || { echo "Failed to copy pytogo binary to $container"; exit 1; }
 
     # Make the serf binary executable
-    docker exec "$container" chmod +x "$destination_dir/$binary_file" || { echo "Failed to make serf executable on $container"; exit 1; }
-    
+    docker exec "$container" chmod +x "$CONTAINER_SERF_PATH" || { echo "Failed to make serf executable on $container"; exit 1; } # <--- CORRECTED: Use CONTAINER_SERF_PATH
+
     # Make the pytogo binary executable
     docker exec "$container" chmod +x "$destination_dir/pytogo/$pytogo_binary" || { echo "Failed to make pytogo binary executable on $container"; exit 1; }
 
@@ -77,4 +78,3 @@ EOF
 
 # Main script execution
 setup_ubuntu_nodes
-
