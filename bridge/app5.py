@@ -524,6 +524,8 @@ def trigger_random_transaction():
         result = subprocess.run(cmd_args, capture_output=True, text=True, timeout=5)
 
         if result.returncode == 0:
+            logger.debug(f"Generated transaction JSON: {transaction_payload_json}")
+            logger.debug(f"Base64-encoded payload: {transaction_payload_b64}")
             logger.info(f"Successfully dispatched Serf event '{event_name}' via RPC. Output: {result.stdout.strip()}")
             return jsonify({"status": "success", "message": f"Transaction event '{event_name}' dispatched.", "payload": transaction_payload_json}), 200
         else:

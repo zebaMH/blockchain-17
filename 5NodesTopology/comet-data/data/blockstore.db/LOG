@@ -11842,3 +11842,8 @@
 11:31:17.214471 version@stat F·[2 52 302] S·695MiB[4MiB 98MiB 592MiB] Sc·[0.50 0.99 0.59]
 11:31:17.230559 memdb@flush committed F·1 T·48.202459ms
 11:31:17.231813 journal@remove removed @5265
+12:16:46.117600 memdb@flush N·15461 S·3MiB
+12:16:46.142708 memdb@flush created L0@5270 N·15461 S·2MiB "BH:..6a8,v4898702":"blo..ore,v4886627"
+12:16:46.142771 version@stat F·[3 52 302] S·697MiB[6MiB 98MiB 592MiB] Sc·[0.75 0.99 0.59]
+12:16:46.148306 memdb@flush committed F·1 T·30.664457ms
+12:16:46.149683 journal@remove removed @5267

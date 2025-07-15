@@ -1,0 +1,7 @@
+# Ignore system and toolchain folders
+/bin/
+/go/
+/snap/
+
+# Ignore other projects
+/serf-test/
