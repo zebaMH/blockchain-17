@@ -1,0 +1,120 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Live Smart Contract Dashboard</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            body { background-color: #111827; color: #d1d5db; font-family: 'Inter', sans-serif; }
+            .card { background-color: #1f2937; border-radius: 0.75rem; border: 1px solid #374151; }
+            .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+            .connected { background-color: #22c55e; } .disconnected { background-color: #ef4444; }
+            .node-card { transition: all 0.3s ease-in-out; border: 2px solid transparent; }
+            .node-alive { border-color: #16a34a; }
+            .node-failed { border-color: #dc2626; opacity: 0.6; }
+            .highlight-source { box-shadow: 0 0 20px 5px #ef4444; transform: scale(1.05); }
+            .highlight-destination { box-shadow: 0 0 20px 5px #22c55e; transform: scale(1.05); }
+        </style>
+    </head>
+    <body class="p-4 md:p-8">
+        <div class="max-w-7xl mx-auto">
+            <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                <h1 class="text-3xl font-bold text-white text-center">✨ Live Smart Contract Dashboard</h1>
+                <button id="dispatchBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition duration-300 w-full md:w-auto">Dispatch Workload Transaction</button>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Left Column -->
+                <div class="space-y-6">
+                    <div class="card p-6">
+                        <h2 class="text-xl font-semibold text-gray-300 mb-4">System Status</h2>
+                        <div id="system-status-container" class="space-y-3"></div>
+                    </div>
+                    <div class="card p-6">
+                        <h2 class="text-xl font-semibold text-gray-300 mb-4">Serf Cluster</h2>
+                        <div id="serf-cluster-container" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div class="card p-6">
+                    <h2 class="text-xl font-semibold text-gray-300 mb-4">Live Node Workloads (kW)</h2>
+                    <div id="workloads-container" class="space-y-4"></div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const systemStatusContainer = document.getElementById('system-status-container');
+            const serfClusterContainer = document.getElementById('serf-cluster-container');
+            const workloadsContainer = document.getElementById('workloads-container');
+            const dispatchBtn = document.getElementById('dispatchBtn');
+
+            function updateSystemStatus(state) {
+                systemStatusContainer.innerHTML = `
+                    <p class="flex items-center justify-between"><span class="text-gray-400">CometBFT RPC:</span><span class="flex items-center font-semibold"><span class="status-dot mr-2 ${state.cometbft_status === 'Connected' ? 'connected' : 'disconnected'}"></span>${state.cometbft_status}</span></p>
+                    <p class="flex items-center justify-between"><span class="text-gray-400">Serf RPC:</span><span class="flex items-center font-semibold"><span class="status-dot mr-2 ${state.serf_status === 'Connected' ? 'connected' : 'disconnected'}"></span>${state.serf_status}</span></p>
+                    <p class="flex items-center justify-between"><span class="text-gray-400">Transactions Broadcast:</span><span class="font-semibold text-white">${state.transactions_broadcast}</span></p>
+                `;
+            }
+
+            function updateSerfCluster(members, lastFlow) {
+                serfClusterContainer.innerHTML = '';
+                members.forEach(member => {
+                    const card = document.createElement('div');
+                    card.id = `node-${member.name}`;
+                    card.className = `node-card p-3 rounded-lg text-center ${member.status === 'alive' ? 'node-alive' : 'node-failed'}`;
+                    card.innerHTML = `<div class="font-bold text-white">${member.name}</div><div class="text-xs text-gray-400">${member.addr}</div>`;
+                    
+                    if (lastFlow && (Date.now() / 1000 - lastFlow.timestamp < 4)) {
+                        if (member.name === lastFlow.source) card.classList.add('highlight-source');
+                        if (member.name === lastFlow.destination) card.classList.add('highlight-destination');
+                    }
+                    serfClusterContainer.appendChild(card);
+                });
+            }
+
+            function updateWorkloads(workloads) {
+                workloadsContainer.innerHTML = '';
+                for (const [node, workload] of Object.entries(workloads)) {
+                    const p = Math.min((workload / 150) * 100, 100);
+                    workloadsContainer.innerHTML += `
+                        <div>
+                            <div class="flex justify-between items-center mb-1"><span class="text-sm font-medium text-gray-300">${node}</span><span class="text-sm font-bold text-white">${workload} kW</span></div>
+                            <div class="bg-gray-700 w-full h-2.5 rounded-full"><div class="bg-blue-600 h-2.5 rounded-full" style="width: ${p}%"></div></div>
+                        </div>
+                    `;
+                }
+            }
+
+            const eventSource = new EventSource('/events');
+            eventSource.onmessage = (event) => {
+                const state = JSON.parse(event.data);
+                updateSystemStatus(state);
+                updateSerfCluster(state.serf_members, state.last_transaction_flow);
+                updateWorkloads(state.node_workloads);
+            };
+
+            dispatchBtn.addEventListener('click', async () => {
+                dispatchBtn.disabled = true;
+                dispatchBtn.textContent = 'Dispatching...';
+                try {
+                    const response = await fetch('/trigger_transaction', { method: 'POST' });
+                    if (!response.ok) {
+                        const data = await response.json();
+                        alert('Failed: ' + data.message);
+                    }
+                } catch (error) {
+                    alert('Error connecting to server.');
+                } finally {
+                    setTimeout(() => {
+                        dispatchBtn.disabled = false;
+                        dispatchBtn.textContent = 'Dispatch Workload Transaction';
+                    }, 1000);
+                }
+            });
+        </script>
+    </body>
+    </html>
+    
